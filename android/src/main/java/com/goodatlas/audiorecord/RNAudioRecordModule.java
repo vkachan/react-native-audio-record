@@ -30,6 +30,7 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
 
     private AudioRecord recorder;
     private int bufferSize;
+    private int cAmplitude = 0;
     private boolean isRecording;
 
     private String tmpFile;
@@ -75,7 +76,7 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
 
         String fileDir = getReactApplicationContext().getFilesDir().getAbsolutePath();
         if (options.hasKey("wavFileDir")) {
-            String fileDir = options.getString("wavFileDir");
+            fileDir = options.getString("wavFileDir");
         }
 
         outFile = fileDir + "/" + "audio.wav";
