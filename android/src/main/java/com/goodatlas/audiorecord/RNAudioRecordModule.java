@@ -73,12 +73,16 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
             audioSource = options.getInt("audioSource");
         }
 
-        String documentDirectoryPath = getReactApplicationContext().getFilesDir().getAbsolutePath();
-        outFile = documentDirectoryPath + "/" + "audio.wav";
-        tmpFile = documentDirectoryPath + "/" + "temp.pcm";
+        String fileDir = getReactApplicationContext().getFilesDir().getAbsolutePath();
+        if (options.hasKey("wavFileDir")) {
+            String fileDir = options.getString("wavFileDir");
+        }
+
+        outFile = fileDir + "/" + "audio.wav";
+        tmpFile = fileDir + "/" + "temp.pcm";
         if (options.hasKey("wavFile")) {
             String fileName = options.getString("wavFile");
-            outFile = documentDirectoryPath + "/" + fileName;
+            outFile = fileDir + "/" + fileName;
         }
 
         isRecording = false;
@@ -87,6 +91,10 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
         bufferSize = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat);
         int recordingBufferSize = bufferSize * 3;
         recorder = new AudioRecord(audioSource, sampleRateInHz, channelConfig, audioFormat, recordingBufferSize);
+    }
+
+    private short getShort(byte argB1, byte argB2) {
+        return (short) (argB1 | (argB2 << 8));
     }
 
     @ReactMethod
@@ -112,6 +120,11 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
                             base64Data = Base64.encodeToString(buffer, Base64.NO_WRAP);
                             eventEmitter.emit("data", base64Data);
                             os.write(buffer, 0, bytesRead);
+                            for (int i = 0; i < buffer.length / 2; i++) { // 16bit
+                                final short curSample = getShort(buffer[i * 2],
+                                        buffer[i * 2 + 1]);
+                                cAmplitude = curSample;
+                            }
                         }
                     }
 
@@ -132,6 +145,11 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
     public void stop(Promise promise) {
         isRecording = false;
         stopRecordingPromise = promise;
+    }
+
+    @ReactMethod
+    public void getMaxAmplitude(Promise promise) {
+        promise.resolve((isRecording ? cAmplitude : -1) + "");
     }
 
     private void saveAsWav() {

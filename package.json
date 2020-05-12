@@ -4,7 +4,11 @@
   "description": "Audio record buffers for React Native",
   "author": "Vinay",
   "license": "MIT",
-  "keywords": [ "react-native", "audio", "record" ],
+  "keywords": [
+    "react-native",
+    "audio",
+    "record"
+  ],
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
