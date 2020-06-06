@@ -124,7 +124,7 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
                             for (int i = 0; i < buffer.length / 2; i++) { // 16bit
                                 final short curSample = getShort(buffer[i * 2],
                                         buffer[i * 2 + 1]);
-                                cAmplitude = curSample;
+                                cAmplitude = curSample < 0 ? curSample * -1 : curSample;
                             }
                         }
                     }
