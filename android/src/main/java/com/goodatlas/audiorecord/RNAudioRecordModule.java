@@ -8,10 +8,6 @@ import android.util.Log;
 
 import android.media.*;
 
-import android.media.MediaPlayer;
-import android.media.MediaPlayer.OnCompletionListener;
-import android.media.MediaPlayer.OnPreparedListener;
-
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -48,10 +44,6 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
 
     private Thread recordingThread = null;
 
-    private MediaPlayer mediaPlayer = null;
-
-    private String playFile;
-
     public RNAudioRecordModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
@@ -63,7 +55,7 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void initRecorder(ReadableMap options) {
+    public void init(ReadableMap options) {
         String fileDir = getReactApplicationContext().getFilesDir().getAbsolutePath();
         if (options.hasKey("wavFileDir")) {
             fileDir = options.getString("wavFileDir");
@@ -276,71 +268,5 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void resume() {
         startRecording(true);
-    }
-
-    @ReactMethod
-    public void initPlayer(ReadableMap options) {
-        Log.d("RNAudioRecordModule", "initPlayer");
-        String fileDir = getReactApplicationContext().getFilesDir().getAbsolutePath();
-        if (options.hasKey("playFile")) {
-            String fileName = options.getString("playFile");
-            playFile = fileDir + "/" + fileName;
-        }
-        mediaPlayer = new MediaPlayer();
-        Log.d("RNAudioRecordModule", playFile);
-        try {
-            mediaPlayer.setDataSource(playFile);
-            mediaPlayer.prepare();
-            Log.d("RNAudioRecordModule", "MediaPlayer prepared");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public boolean isPlayingMediaPlayer() {
-        boolean isPlaying = false;
-        try {
-            isPlaying = mediaPlayer != null && mediaPlayer.isPlaying();
-        } catch (IllegalStateException e) {
-            isPlaying = false;
-        }
-        return isPlaying;
-    }
-
-    @ReactMethod
-    public void pauseMediaPlayer(Promise promise) {
-        if (isPlayingMediaPlayer()) {
-            mediaPlayer.pause();
-        }
-    }
-
-    @ReactMethod
-    public void playMediaPlayer() {
-        if (!isPlayingMediaPlayer()) {
-            mediaPlayer.start();
-        }
-    }
-
-    @ReactMethod
-    public void stopMediaPlayer() {
-        if (isPlayingMediaPlayer()) {
-            mediaPlayer.stop();
-            mediaPlayer.release();
-            mediaPlayer = null;
-        }
-    }
-
-    @ReactMethod
-    public void getTimeMediaPlayer(Promise promise) {
-        int current = 0;
-        if (isPlayingMediaPlayer()) {
-            current = mediaPlayer.getCurrentPosition();
-        }
-        promise.resolve(current);
-    }
-
-    @ReactMethod
-    public void getDuration(Promise promise) {
-        promise.resolve(mediaPlayer.getDuration());
     }
 }
