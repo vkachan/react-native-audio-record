@@ -4,6 +4,8 @@
 
 #define kNumberBuffers 3
 
+extern NSInteger *cAmplitude;
+
 typedef struct {
     __unsafe_unretained id      mSelf;
     AudioStreamBasicDescription mDataFormat;
