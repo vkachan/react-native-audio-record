@@ -2,13 +2,15 @@
 
 @implementation RNAudioRecord
 
+NSInteger *cAmplitude;
+
 RCT_EXPORT_MODULE();
 
 RCT_EXPORT_METHOD(init:(NSDictionary *) options) {
     RCTLogInfo(@"init");
-    _recordState.mDataFormat.mSampleRate        = options[@"sampleRate"] == nil ? 44100 : [options[@"sampleRate"] doubleValue];
-    _recordState.mDataFormat.mBitsPerChannel    = options[@"bitsPerSample"] == nil ? 16 : [options[@"bitsPerSample"] unsignedIntValue];
-    _recordState.mDataFormat.mChannelsPerFrame  = options[@"channels"] == nil ? 1 : [options[@"channels"] unsignedIntValue];
+    _recordState.mDataFormat.mSampleRate        = 44100;
+    _recordState.mDataFormat.mBitsPerChannel    = 16;
+    _recordState.mDataFormat.mChannelsPerFrame  = 2;
     _recordState.mDataFormat.mBytesPerPacket    = (_recordState.mDataFormat.mBitsPerChannel / 8) * _recordState.mDataFormat.mChannelsPerFrame;
     _recordState.mDataFormat.mBytesPerFrame     = _recordState.mDataFormat.mBytesPerPacket;
     _recordState.mDataFormat.mFramesPerPacket   = 1;
@@ -16,13 +18,13 @@ RCT_EXPORT_METHOD(init:(NSDictionary *) options) {
     _recordState.mDataFormat.mFormatID          = kAudioFormatLinearPCM;
     _recordState.mDataFormat.mFormatFlags       = _recordState.mDataFormat.mBitsPerChannel == 8 ? kLinearPCMFormatFlagIsPacked : (kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked);
 
-    
+
     _recordState.bufferByteSize = 2048;
     _recordState.mSelf = self;
-    
+
     NSString *fileName = options[@"wavFile"] == nil ? @"audio.wav" : options[@"wavFile"];
-    NSString *docDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    _filePath = [NSString stringWithFormat:@"%@/%@", docDir, fileName];
+    NSString *wavFileDir = options[@"wavFileDir"];
+    _filePath = [NSString stringWithFormat:@"%@/%@", wavFileDir, fileName];
 }
 
 RCT_EXPORT_METHOD(start) {
@@ -34,11 +36,11 @@ RCT_EXPORT_METHOD(start) {
 
     _recordState.mIsRunning = true;
     _recordState.mCurrentPacket = 0;
-    
+
     CFURLRef url = CFURLCreateWithString(kCFAllocatorDefault, (CFStringRef)_filePath, NULL);
     AudioFileCreateWithURL(url, kAudioFileWAVEType, &_recordState.mDataFormat, kAudioFileFlags_EraseFile, &_recordState.mAudioFile);
     CFRelease(url);
-    
+
     AudioQueueNewInput(&_recordState.mDataFormat, HandleInputBuffer, &_recordState, NULL, NULL, 0, &_recordState.mQueue);
     for (int i = 0; i < kNumberBuffers; i++) {
         AudioQueueAllocateBuffer(_recordState.mQueue, _recordState.bufferByteSize, &_recordState.mBuffers[i]);
@@ -47,19 +49,45 @@ RCT_EXPORT_METHOD(start) {
     AudioQueueStart(_recordState.mQueue, NULL);
 }
 
-RCT_EXPORT_METHOD(stop:(RCTPromiseResolveBlock)resolve
-                  rejecter:(__unused RCTPromiseRejectBlock)reject) {
-    RCTLogInfo(@"stop");
-    if (_recordState.mIsRunning) {
-        _recordState.mIsRunning = false;
-        AudioQueueStop(_recordState.mQueue, true);
-        AudioQueueDispose(_recordState.mQueue, true);
-        AudioFileClose(_recordState.mAudioFile);
+RCT_REMAP_METHOD(stop,
+                 stopWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(__unused RCTPromiseRejectBlock)reject) {
+        RCTLogInfo(@"stop");
+        if (_recordState.mIsRunning) {
+            _recordState.mIsRunning = false;
+            AudioQueueStop(_recordState.mQueue, true);
+            AudioQueueDispose(_recordState.mQueue, true);
+            AudioFileClose(_recordState.mAudioFile);
+        }
+        resolve(_filePath);
+        unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:_filePath error:nil] fileSize];
+        RCTLogInfo(@"file path %@", _filePath);
+        RCTLogInfo(@"file size %llu", fileSize);
+}
+
+RCT_EXPORT_METHOD(pause) {
+        RCTLogInfo(@"pause");
+        if (_recordState.mIsRunning) {
+            _recordState.mIsRunning = false;
+            AudioQueueStop(_recordState.mQueue, true);
+        }
+}
+
+RCT_EXPORT_METHOD(resume) {
+    RCTLogInfo(@"resume");
+    _recordState.mIsRunning = true;
+    for (int i = 0; i < kNumberBuffers; i++) {
+        AudioQueueAllocateBuffer(_recordState.mQueue, _recordState.bufferByteSize, &_recordState.mBuffers[i]);
+        AudioQueueEnqueueBuffer(_recordState.mQueue, _recordState.mBuffers[i], 0, NULL);
     }
-    resolve(_filePath);
-    unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:_filePath error:nil] fileSize];
-    RCTLogInfo(@"file path %@", _filePath);
-    RCTLogInfo(@"file size %llu", fileSize);
+    AudioQueueStart(_recordState.mQueue, NULL);
+}
+
+RCT_REMAP_METHOD(getMaxAmplitude,
+                 getMaxAmplitudeWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+    resolve([NSNumber numberWithLong:labs(cAmplitude)]);
 }
 
 void HandleInputBuffer(void *inUserData,
@@ -69,11 +97,11 @@ void HandleInputBuffer(void *inUserData,
                        UInt32 inNumPackets,
                        const AudioStreamPacketDescription *inPacketDesc) {
     AQRecordState* pRecordState = (AQRecordState *)inUserData;
-    
+
     if (!pRecordState->mIsRunning) {
         return;
     }
-    
+
     if (AudioFileWritePackets(pRecordState->mAudioFile,
                               false,
                               inBuffer->mAudioDataByteSize,
@@ -84,15 +112,20 @@ void HandleInputBuffer(void *inUserData,
                               ) == noErr) {
         pRecordState->mCurrentPacket += inNumPackets;
     }
-    
+
     short *samples = (short *) inBuffer->mAudioData;
-    long nsamples = inBuffer->mAudioDataByteSize;
-    NSData *data = [NSData dataWithBytes:samples length:nsamples];
-    NSString *str = [data base64EncodedStringWithOptions:0];
-    [pRecordState->mSelf sendEventWithName:@"data" body:str];
-    
+    UInt32 sampleCount = (inBuffer->mAudioDataBytesCapacity / sizeof (SInt16));
+    for (UInt32 i = 0; i < sampleCount; i++) {
+        cAmplitude = samples[i];
+    }
     AudioQueueEnqueueBuffer(pRecordState->mQueue, inBuffer, 0, NULL);
 }
+
+union intToFloat
+{
+    uint32_t i;
+    float fp;
+};
 
 - (NSArray<NSString *> *)supportedEvents {
     return @[@"data"];
