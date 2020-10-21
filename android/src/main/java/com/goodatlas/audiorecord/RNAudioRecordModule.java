@@ -8,12 +8,17 @@ import android.util.Log;
 
 import android.media.*;
 
+import androidx.annotation.Nullable;
+
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.ReactContext;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -21,6 +26,9 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+
+import java.util.TimerTask;
+import java.util.Timer;
 
 public class RNAudioRecordModule extends ReactContextBaseJavaModule {
 
@@ -54,6 +62,14 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
         return "RNAudioRecord";
     }
 
+    private void sendEvent(ReactContext reactContext,
+                           String eventName,
+                           @Nullable WritableMap params) {
+        reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit(eventName, params);
+    }
+
     @ReactMethod
     public void init(ReadableMap options) {
         String fileDir = getReactApplicationContext().getFilesDir().getAbsolutePath();
@@ -71,6 +87,16 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
         bufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLE_RATE, RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);
 
         isRecording = false;
+        new Timer().scheduleAtFixedRate(new TimerTask(){
+            @Override
+            public void run(){
+                if (isRecording) {
+                    WritableMap params = Arguments.createMap();
+                    params.putString("current", Integer.toString(cAmplitude < 0 ? cAmplitude * -1 : cAmplitude));
+                    sendEvent(reactContext, "onGetMaxAmplitude", params);
+                }
+            }
+        }, 0, 50);
     }
 
     private short getShort(byte argB1, byte argB2) {
