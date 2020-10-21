@@ -50,6 +50,8 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
     private String tmpFile;
     private String outFile;
 
+    private Timer t;
+
     private Thread recordingThread = null;
 
     public RNAudioRecordModule(ReactApplicationContext reactContext) {
@@ -87,16 +89,6 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
         bufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLE_RATE, RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);
 
         isRecording = false;
-        new Timer().scheduleAtFixedRate(new TimerTask(){
-            @Override
-            public void run(){
-                if (isRecording) {
-                    WritableMap params = Arguments.createMap();
-                    params.putString("current", Integer.toString(cAmplitude < 0 ? cAmplitude * -1 : cAmplitude));
-                    sendEvent(reactContext, "onGetMaxAmplitude", params);
-                }
-            }
-        }, 0, 50);
     }
 
     private short getShort(byte argB1, byte argB2) {
@@ -115,6 +107,17 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
             }
         }, "AudioRecorder Thread");
         recordingThread.start();
+        t = new Timer();
+        t.scheduleAtFixedRate(new TimerTask(){
+            @Override
+            public void run(){
+                if (isRecording) {
+                    WritableMap params = Arguments.createMap();
+                    params.putString("current", Integer.toString(cAmplitude < 0 ? cAmplitude * -1 : cAmplitude));
+                    sendEvent(reactContext, "onGetMaxAmplitude", params);
+                }
+            }
+        }, 0, 50);
     }
 
     private boolean stopRecording(boolean b) {
@@ -125,7 +128,7 @@ public class RNAudioRecordModule extends ReactContextBaseJavaModule {
             recorder = null;
             recordingThread = null;
         }
-
+        t.cancel();
         if (b == true) {
             copyWaveFile(tmpFile, outFile);
             deleteTempFile();
